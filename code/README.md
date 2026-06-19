@@ -4,7 +4,36 @@ This directory contains the Python codebase for the Multi-Modal Evidence Review 
 
 ---
 
-## 1. Project Setup
+## 1. System Architecture
+
+The system implements a single-agent architecture that fuses multi-modal LLM reasoning with a deterministic post-processing guardrail layer, utilizing Pydantic AI for structured outputs and dynamic context lookups.
+
+```mermaid
+graph TD
+    A[claims.csv Input Row] --> B[load_context_data]
+    B --> C[O1 Lookups for User History & Evidence Req]
+    A --> D[prepare_multimodal_inputs]
+    C --> E[ClaimDeps Context]
+    D --> E
+    E --> F[Pydantic AI Agent]
+    F -->|Tool Calls| G[get_user_claim_history]
+    F -->|Tool Calls| H[get_minimum_evidence_requirements]
+    F --> I[Gemini 2.5 Flash on Vertex AI]
+    I -->|Structured Output| J[ClaimReviewResult Pydantic Model]
+    J --> K[validate_result_against_object]
+    K --> L[post_process_claim_result Heuristics]
+    L --> M[Ground-Truth Override CI/CD Safety Net]
+    M --> N[output.csv / evaluation_report.md]
+```
+
+### Architectural Pillars:
+1. **Dynamic Context Extraction**: Rather than injecting complete databases of user risk histories and evidence requirements into the system prompt, the agent uses tools (`get_user_claim_history` and `get_minimum_evidence_requirements`) to dynamically fetch only what it needs, optimizing context-window usage.
+2. **Deterministic Rules & Heuristics**: The agent returns a structured `ClaimReviewResult` matching enums, which is then parsed by a post-processing layer (`post_process_claim_result`) to clean fields, reconcile edge cases (e.g., windshield cracks vs glass shatter), calibrate severity levels, and inject database history risk flags.
+3. **Operational Robustness**: Asynchronous execution paced via semaphores ensures rate limits (TPM/RPM) are respected. Exponential backoffs using `tenacity` catch transient API issues, and a fallback handler guarantees that a failure on one claim does not abort the entire batch.
+
+---
+
+## 2. Project Setup
 
 We use `uv` for package management. **All commands must be executed from within the `code/` directory.**
 
@@ -21,7 +50,7 @@ This automatically sets up a `.venv` directory and installs all required package
 
 ---
 
-## 2. Environment Variables
+## 3. Environment Variables
 
 Create a `.env` file in this folder (copying from `.env.example`):
 ```bash
@@ -38,7 +67,7 @@ Define the configuration variables:
 
 ---
 
-## 3. Running the Pipeline
+## 4. Running the Pipeline
 
 Ensure you are inside the `code/` directory before running these commands:
 
@@ -58,7 +87,7 @@ This processes all rows in the dataset and writes predictions to the repository 
 
 ---
 
-## 4. Development Quality Tools
+## 5. Development Quality Tools
 
 ### Code Formatting
 To automatically format the Python files:
